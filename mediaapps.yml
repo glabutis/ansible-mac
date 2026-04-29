@@ -15,15 +15,11 @@
       - dockutil
 
     homebrew_casks:
-      - visual-studio-code
       - firefox
       - caffeine
       - companion-satellite
       - propresenter
-      - reaper
       - spotify
-
-
 
     # Apps to launch at login — use the app name as it appears in /Applications
     login_items:
@@ -35,10 +31,9 @@
       - /System/Applications/Apps.app
       - /Applications/Firefox.app
       - /System/Applications/Utilities/Terminal.app
-      - /Applications/Claude.app
-      - /Applications/Visual Studio Code.app
+      - /Applications/ProPresenter.app
 
-    timezone: America/Indiana/Indianapolis
+    timezone: America/New_York
 
   pre_tasks:
     - name: Ensure not running as root
@@ -128,3 +123,4 @@
       become: true
       register: swupdate
       changed_when: "'No updates' not in swupdate.stdout and 'No new software' not in swupdate.stdout"
+
