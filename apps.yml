@@ -1,0 +1,139 @@
+---
+# homebrew_setup.yml
+# Minimal macOS Homebrew setup — a starting point to build from.
+#
+# Usage:
+#   ansible-playbook homebrew_setup.yml
+#
+# Requirements:
+#   ansible-galaxy collection install community.general
+
+- name: Homebrew baseline setup
+  hosts: localhost
+  connection: local
+  gather_facts: true
+
+  vars:
+    homebrew_prefix: "{{ '/opt/homebrew' if ansible_facts['machine'] == 'arm64' else '/usr/local' }}"
+
+    homebrew_packages:
+      - git
+      - ffmpeg
+      - yt-dlp
+      - dockutil
+
+    homebrew_casks:
+      - visual-studio-code
+      - firefox
+      - caffeine
+      - companion-satellite
+      - propresenter
+      - reaper
+      - claude
+      - spotify
+
+
+
+    # Apps to launch at login — use the app name as it appears in /Applications
+    login_items:
+      - caffeine
+      - companion-satellite
+
+    # Dock pinned items, in order. Finder is always present on the left and is not listed here.
+    dock_apps:
+      - /System/Applications/Apps.app
+      - /Applications/Firefox.app
+      - /System/Applications/Utilities/Terminal.app
+      - /Applications/Claude.app
+      - /Applications/Visual Studio Code.app
+
+    timezone: America/Indiana/Indianapolis
+
+  pre_tasks:
+    - name: Ensure not running as root
+      fail:
+        msg: "Do not run this playbook with sudo. Run as your normal user."
+      when: ansible_user_id == "root"
+
+  tasks:
+
+    - name: Check if Homebrew is installed
+      stat:
+        path: "{{ homebrew_prefix }}/bin/brew"
+      register: brew_binary
+
+    - name: Install Homebrew
+      when: not brew_binary.stat.exists
+      shell: |
+        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+      args:
+        creates: "{{ homebrew_prefix }}/bin/brew"
+
+    - name: Update Homebrew
+      community.general.homebrew:
+        update_homebrew: true
+
+    - name: Install formulae
+      community.general.homebrew:
+        name: "{{ item }}"
+        state: present
+      loop: "{{ homebrew_packages }}"
+
+    - name: Install casks
+      community.general.homebrew_cask:
+        name: "{{ item }}"
+        state: present
+      loop: "{{ homebrew_casks }}"
+      ignore_errors: true
+
+    - name: Run brew cleanup
+      command: "{{ homebrew_prefix }}/bin/brew cleanup"
+      changed_when: false
+
+    # ── Login items ──────────────────────────────────────────────────────────
+
+    - name: Get current login items
+      command: >
+        osascript -e 'tell application "System Events" to get the name of every login item'
+      register: current_login_items
+      changed_when: false
+
+    - name: Add login items
+      command: >
+        osascript -e 'tell application "System Events" to make new login item
+        at end with properties {path:"/Applications/{{ item }}.app", hidden:false}'
+      loop: "{{ login_items }}"
+      when: item not in current_login_items.stdout
+
+    # ── Dock ─────────────────────────────────────────────────────────────────
+
+    - name: Remove all current Dock items
+      command: "{{ homebrew_prefix }}/bin/dockutil --remove all --no-restart"
+
+    - name: Pin Dock items in order
+      command: "{{ homebrew_prefix }}/bin/dockutil --add '{{ item }}' --no-restart"
+      loop: "{{ dock_apps }}"
+
+    - name: Restart Dock
+      command: killall Dock
+      changed_when: false
+
+    # ── Timezone ─────────────────────────────────────────────────────────────
+
+    - name: Get current timezone
+      command: systemsetup -gettimezone
+      register: current_tz
+      changed_when: false
+
+    - name: Set timezone
+      command: systemsetup -settimezone {{ timezone }}
+      become: true
+      when: timezone not in current_tz.stdout
+
+    # ── Software updates ─────────────────────────────────────────────────────
+
+    - name: Install all available macOS updates
+      command: softwareupdate --install --all --no-scan
+      become: true
+      register: swupdate
+      changed_when: "'No updates' not in swupdate.stdout and 'No new software' not in swupdate.stdout"
