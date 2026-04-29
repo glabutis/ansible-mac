@@ -55,11 +55,6 @@
       args:
         creates: "{{ homebrew_prefix }}/bin/brew"
 
-    - name: Update Homebrew
-      community.general.homebrew:
-        update_homebrew: true
-
-    - name: Install formulae
       community.general.homebrew:
         name: "{{ item }}"
         state: present
